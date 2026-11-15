@@ -14,11 +14,13 @@ jobs:
     runs-on: windows-latest
     timeout-minutes: 120
     steps:
-      # 1. ОБЯЗАТЕЛЬНО: Скачиваем файлы репозитория (включая ваш zip-архив) на сервер
-      - name: Checkout repository
+      # 1. Скачиваем репозиторий И большие файлы из Git LFS
+      - name: Checkout repository (with LFS)
         uses: actions/checkout@v4
+        with:
+          lfs: true  # <-- КЛЮЧЕВОЕ ИСПРАВЛЕНИЕ: загружаем реальные бинарные файлы
 
-      # 2. Распаковка архива через 7-Zip (обходим ошибку "Central Directory corrupt")
+      # 2. Распаковка архива через 7-Zip
       - name: Unpack source archive
         shell: powershell
         run: |
@@ -28,14 +30,20 @@ jobs:
               exit 1 
           }
           
-          # 7-Zip обычно уже предустановлен на windows-latest, но на всякий случай проверяем путь
+          # Проверка размера, чтобы убедиться, что это не LFS-указатель
+          $size = (Get-Item $zip.FullName).Length
+          Write-Host "Размер файла: $size байт"
+          if ($size -lt 1024) {
+              Write-Error "Файл '$($zip.Name)' подозрительно мал ($size байт). Вероятно, это LFS-указатель, а не реальный архив. Убедитесь, что в .gitattributes для *.zip указан filter=lfs, и что шаг checkout выполнен с lfs: true."
+              exit 1
+          }
+
           $7z = "C:\Program Files\7-Zip\7z.exe"
           if (-not (Test-Path $7z)) { 
-              $7z = "7z" # Если лежит в PATH
+              $7z = "7z"
           }
           
           Write-Host "Распаковка архива: $($zip.Name)"
-          # x - извлечь, -o - папка назначения, -y - подтвердить всё
           & $7z x $zip.FullName -o"source" -y
           
           if (-not (Test-Path source/OneLauncher-main/Cargo.toml)) { 
@@ -64,7 +72,6 @@ jobs:
       - name: Stage app-local VC++ runtime
         shell: bash
         working-directory: source/OneLauncher-main
-        # Используем python вместо python3
         run: python distribution/windows/bundle-crt.py 
 
       - name: Package NSIS installer
