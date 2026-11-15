@@ -18,14 +18,30 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      # 2. Распаковка архива (используем powershell вместо pwsh, чтобы избежать сбоев WindowsBase.dll)
+      # 2. Распаковка архива через 7-Zip (обходим ошибку "Central Directory corrupt")
       - name: Unpack source archive
-        shell: powershell 
+        shell: powershell
         run: |
           $zip = Get-ChildItem -Path ${{ github.workspace }} -Filter *.zip | Select-Object -First 1
-          if (-not $zip) { Write-Error "Zip-архив не найден: положите OneLauncher-elyby-offline.zip в корень репозитория"; exit 1 }
-          Expand-Archive -Path $zip.FullName -DestinationPath source -Force
-          if (-not (Test-Path source/OneLauncher-main/Cargo.toml)) { Write-Error "В zip нет папки OneLauncher-main"; exit 1 }
+          if (-not $zip) { 
+              Write-Error "Zip-архив не найден: положите OneLauncher-elyby-offline.zip в корень репозитория"
+              exit 1 
+          }
+          
+          # 7-Zip обычно уже предустановлен на windows-latest, но на всякий случай проверяем путь
+          $7z = "C:\Program Files\7-Zip\7z.exe"
+          if (-not (Test-Path $7z)) { 
+              $7z = "7z" # Если лежит в PATH
+          }
+          
+          Write-Host "Распаковка архива: $($zip.Name)"
+          # x - извлечь, -o - папка назначения, -y - подтвердить всё
+          & $7z x $zip.FullName -o"source" -y
+          
+          if (-not (Test-Path source/OneLauncher-main/Cargo.toml)) { 
+              Write-Error "В zip нет папки OneLauncher-main"
+              exit 1 
+          }
           Write-Host "Успешно распакован источник: $($zip.Name)"
 
       - name: Install Rust (stable)
@@ -48,7 +64,7 @@ jobs:
       - name: Stage app-local VC++ runtime
         shell: bash
         working-directory: source/OneLauncher-main
-        # Используем python вместо python3 для Windows-раннера
+        # Используем python вместо python3
         run: python distribution/windows/bundle-crt.py 
 
       - name: Package NSIS installer
