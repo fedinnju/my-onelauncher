@@ -18,23 +18,22 @@ jobs:
       - name: Checkout repository (with LFS)
         uses: actions/checkout@v4
         with:
-          lfs: true  # <-- КЛЮЧЕВОЕ ИСПРАВЛЕНИЕ: загружаем реальные бинарные файлы
+          lfs: true
 
-      # 2. Распаковка архива через 7-Zip
+      # 2. Распаковка архива через 7-Zip (сообщения на английском для избежания ошибок кодировки)
       - name: Unpack source archive
         shell: powershell
         run: |
           $zip = Get-ChildItem -Path ${{ github.workspace }} -Filter *.zip | Select-Object -First 1
           if (-not $zip) { 
-              Write-Error "Zip-архив не найден: положите OneLauncher-elyby-offline.zip в корень репозитория"
+              Write-Error "ZIP archive not found. Please put OneLauncher-elyby-offline.zip in the repository root."
               exit 1 
           }
           
-          # Проверка размера, чтобы убедиться, что это не LFS-указатель
           $size = (Get-Item $zip.FullName).Length
-          Write-Host "Размер файла: $size байт"
+          Write-Host "File size: $size bytes"
           if ($size -lt 1024) {
-              Write-Error "Файл '$($zip.Name)' подозрительно мал ($size байт). Вероятно, это LFS-указатель, а не реальный архив. Убедитесь, что в .gitattributes для *.zip указан filter=lfs, и что шаг checkout выполнен с lfs: true."
+              Write-Error "File '$($zip.Name)' is too small ($size bytes). It might be an LFS pointer."
               exit 1
           }
 
@@ -43,14 +42,14 @@ jobs:
               $7z = "7z"
           }
           
-          Write-Host "Распаковка архива: $($zip.Name)"
+          Write-Host "Extracting archive: $($zip.Name)"
           & $7z x $zip.FullName -o"source" -y
           
           if (-not (Test-Path source/OneLauncher-main/Cargo.toml)) { 
-              Write-Error "В zip нет папки OneLauncher-main"
+              Write-Error "Folder OneLauncher-main not found in the extracted archive."
               exit 1 
           }
-          Write-Host "Успешно распакован источник: $($zip.Name)"
+          Write-Host "Successfully extracted source: $($zip.Name)"
 
       - name: Install Rust (stable)
         uses: dtolnay/rust-toolchain@stable
