@@ -1,10 +1,5 @@
 name: OneClient Installer Build
 
-# Собирает Windows-инсталлер (oneclient_app_2.10.2_x64-setup.exe) с ВАШИМИ
-# изменениями (Ely.by + оффлайн-аккаунты) внутри. Rust/Cargo локально НЕ нужны:
-# всё собирает сервер GitHub. Готовый файл появится в разделе "Artifacts"
-# на странице запуска (внизу, после зелёной галочки).
-
 on:
   push:
   workflow_dispatch:
@@ -14,10 +9,15 @@ jobs:
     runs-on: windows-latest
     timeout-minutes: 120
     steps:
+      # 1. Обязательный шаг: скачиваем файлы репозитория (включая ваш zip) на раннер
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      # 2. Теперь скрипт найдет zip-архив
       - name: Unpack source archive
         shell: pwsh
         run: |
-          $zip = Get-ChildItem -Filter *.zip | Select-Object -First 1
+          $zip = Get-ChildItem -Path ${{ github.workspace }} -Filter *.zip | Select-Object -First 1
           if (-not $zip) { Write-Error "Zip-архив не найден: положите OneLauncher-elyby-offline.zip в корень репозитория"; exit 1 }
           Expand-Archive -Path $zip.FullName -DestinationPath source
           if (-not (Test-Path source/OneLauncher-main/Cargo.toml)) { Write-Error "В zip нет папки OneLauncher-main"; exit 1 }
@@ -43,7 +43,7 @@ jobs:
       - name: Stage app-local VC++ runtime
         shell: bash
         working-directory: source/OneLauncher-main
-        run: python3 distribution/windows/bundle-crt.py
+        run: python distribution/windows/bundle-crt.py # На Windows-раннере команда python3 может не сработать, лучше использовать python
 
       - name: Package NSIS installer
         shell: bash
